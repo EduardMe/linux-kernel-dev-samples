@@ -1,4 +1,4 @@
-obj-m += hello-sample.o
+obj-m += hello.o hello-param.o
 
 KDIR = /usr/src/linux-headers-$(shell uname -r)
 

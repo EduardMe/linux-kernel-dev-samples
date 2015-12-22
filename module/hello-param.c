@@ -1,33 +1,35 @@
 /*
  *  Hello World example for a simple linux kernel module with parameters.
  * 
- *  Install module:
+ *  Install module as root:
  *  # insmod hello-param.ko param_var=42 param_array=40,41,42
  *
- *  Uninstall module:
+ *  Uninstall module as root:
  *  # rmmod hello-param.ko
  *
  *  View log:
  *  # dmesg
+ *
+ *  Tested on Ubuntu 12.04
  */
 
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 
- int param_var = 0;
- int param_array[3] = { 0, 0, 0 };
+int param_var = 0;
+int param_array[3] = { 0, 0, 0 };
 
- // Register variable with read and write permissions.
- // S_IRUSR = read, user
- // S_IWUSR = write, user
- // S_IXUSR = execute, user
- // S_IRGRP = read, group
- // S_IWGRP = write, group
- module_param(param_var, int, S_IRUSR | S_IWUSR);
+// Register variable with read and write permissions.
+// S_IRUSR = read, user
+// S_IWUSR = write, user
+// S_IXUSR = execute, user
+// S_IRGRP = read, group
+// S_IWGRP = write, group
+module_param(param_var, int, S_IRUSR | S_IWUSR);
 
- // Register an array
- module_param_array(param_array, int, NULL, S_IRUSR | S_IWUSR);
+// Register an array
+module_param_array(param_array, int, NULL, S_IRUSR | S_IWUSR);
 
 void display(void)
 {
@@ -54,4 +56,3 @@ static void hello_exit(void)
 module_init(hello_init);
 module_exit(hello_exit);
 
-MODULE_LICENSE("GPL");

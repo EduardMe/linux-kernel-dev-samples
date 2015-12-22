@@ -1,14 +1,24 @@
 /*
  *  Hello World example for a simple linux kernel module.
  * 
- *  Create device file (path, char device identifier, major number, minor number):
- *  # sudo mknod /dev/mychardevice c 900 1
+ *  Install module as root:  
+ *  # insmod char-device.ko
  *
- *  Uninstall module:
+ *  Check dmesg for the next instruction
+ *  # dmesg
+ *
+ *  Create device file as root (path, char device identifier, major number, minor number).
+ #  You find the correct major number in the instructions from dmesg obtained in the last step.
+ *  The following step is just an example, make sure you check `dmesg`.
+ *  # mknod /dev/mychardevice c 900 1
+ *
+ *  Uninstall module as root:
  *  # rmmod hello.ko
  *
  *  View log:
  *  # dmesg
+ *
+ *  Tested on Ubuntu 12.04
  */
 
 #include <linux/module.h>
@@ -20,18 +30,11 @@
 
 #define DEVICE_NAME "mychardevice"
 
+// Stores data for the driver
 struct my_device {
 	char data[100];
 	struct semaphore sem;
 } virtual_device;
-
-struct file_operations fops = {
-	.owner = THIS_MODULE,
-	.open = device_open,
-	.release = device_close,
-	.write = device_write,
-	.read = device_read
-};
 
 struct cdev *mcdev;
 int major_num;
@@ -39,11 +42,17 @@ int ret;
 
 dev_t dev_num;
 
-int device_open(struct inode *inode, struct file *filep)
+/*
+ * Called when the device is opened (/dev/mychardevice)
+ * inode = reference to file
+ * filep = abstract open file containing file operations structure (fops)
+ */
+int device_open(struct inode* inode, struct file* filep)
 {
-	if(down_interruptable(&virtual_device.sem) != 0)
+	// Lock the file with a mutual exclusive lock mutex
+	if(down_interruptible(&virtual_device.sem) != 0)
 	{
-		printk(KERN_ALERT "mychardevice: could not lock the device while openin\n");
+		printk(KERN_ALERT "mychardevice: could not lock the device while opening\n");
 		return -1;
 	}
 
@@ -51,8 +60,55 @@ int device_open(struct inode *inode, struct file *filep)
 	return 0;
 }
 
+/*
+ * Called when user is reading from the device to get information.
+ * Copy data from kernel (device) to user space (process).
+ */
+ssize_t device_read(struct file* filep, char* data, size_t len, loff_t* offset)
+{
+	printk(KERN_ALERT "mychardevice: Reading from device.\n");
+	ret = copy_to_user(data, virtual_device.data, len); // destination, source, length
+
+	return ret;
+}
+
+/*
+ * Called when user is writing information to the device.
+ * Copy data from user (process) to kernel space (device).
+ */
+ssize_t device_write(struct file* filep, const char* data, size_t len, loff_t* offset)
+{
+	printk(KERN_ALERT "mychardevice: Writing to device.\n");
+	ret = copy_from_user(virtual_device.data, data, len); // destination, source, length
+
+	return ret;
+}
+
+/*
+ * Called when the device is closed (/dev/mychardevice)
+ * inode = reference to file
+ * filep = abstract open file containing file operations structure (fops)
+ */
+int device_close(struct inode* inode, struct file* filep)
+{
+	// Release lock from device
+	up(&virtual_device.sem);
+	printk(KERN_ALERT "mychardevice: Close device.\n");
+
+	return 0;
+}
+
+// Map file operation on the device file to functions
+struct file_operations fops = {
+	.owner 		= THIS_MODULE,
+	.open 		= device_open,
+	.release 	= device_close,
+	.write 		= device_write,
+	.read 		= device_read
+};
+
 // Allocate and initialize the driver
-static int driver_entry(void) 
+static int driver_init(void) 
 {
 	ret = alloc_chrdev_region(&dev_num, 0, 1, DEVICE_NAME); // dev_t*, minor, count, name
 	
@@ -93,5 +149,5 @@ static void driver_exit(void)
 	printk(KERN_ALERT "mychardevice: driver is unloaded\n");
 }
 
-module_init(hello_init);
-module_exit(hello_exit);
+module_init(driver_init);
+module_exit(driver_exit);
